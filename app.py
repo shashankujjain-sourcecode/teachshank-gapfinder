@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import io
+from datetime import datetime
 
-# Page Configuration
+# Page Configuration Setup
 st.set_page_config(page_title="TeachShank - GapFinder Engine", layout="wide")
 
-# 1. Master Data Loading Logic (Using your uploaded TSV structure)
+# 1. Master Data Loading Logic (Reads your uploaded TSV file structure)
 @st.cache_data
 def load_tsv_data():
     try:
@@ -18,15 +19,12 @@ def load_tsv_data():
 
 df_master = load_tsv_data()
 
-# =========================================================================
-# BRANDING & SCHOOL LOGO SYSTEM
-# =========================================================================
+# Header Branding Function
 def render_school_header():
     col_logo, col_title = st.columns([1, 5])
     with col_logo:
-        # School Logo Handler: Agar local/online logo image path available na ho, 
-        # toh placeholder load hoga. Aap 'school_logo.png' ki jagah apni actual image use kar sakte hain.
         try:
+            # School Branding Logo Placeholder
             st.image("https://via.placeholder.com/150x150.png?text=SCHOOL+LOGO", width=120)
         except:
             st.markdown("<div style='background-color:#edf2f7; padding:20px; border-radius:5px; text-align:center;'>LOGO</div>", unsafe_allow_html=True)
@@ -36,19 +34,19 @@ def render_school_header():
         st.markdown("<p style='color: #4a5568; font-size:1.1em;'>Premium Assessment Manager & Diagnostic Remediation Portal</p>", unsafe_allow_html=True)
     st.write("---")
 
-# Render Header on Top of the App
+# Render Header
 render_school_header()
 
 if df_master is not None:
-    # Navigation Tabs matching your exact requirements
-    tab1, tab2 = st.tabs(["📋 Generate Assessment Panel", "📊 Check Assessment Panel (Upload Excel)"])
+    # 2-Tab Split Architecture matching your operational blueprint
+    tab1, tab2 = st.tabs(["📋 1. Generate Assessment & Paper", "📊 2. Check Assessment (Upload Excel)"])
 
     # =========================================================================
-    # SECTION 1: GENERATE ASSESSMENT PANEL
+    # TAB 1: GENERATE ASSESSMENT & PAPER
     # =========================================================================
     with tab1:
-        st.header("Create Assessment Paper & Response Template")
-        st.info("⚠️ **Product Constraint Enabled:** Saare templates purely text-based generate honge. Diagram ya graphic questions completely omitted hain.")
+        st.header("Create Assessment Paper & Response Sheet Template")
+        st.info("🚫 **Diagram-Free Constraint Active:** Is system mein ek bhi picture ya diagram wala question nahi aayega. Saare questions pure text-based hain.")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -61,88 +59,116 @@ if df_master is not None:
             topics = sorted(df_master[(df_master['Grade'] == selected_grade) & (df_master['Subject'] == selected_subject)]['Chapter Name'].unique())
             selected_topic = st.selectbox("Select Chapter / Topic:", topics, key="gen_topic")
             
-        # Add Custom Topic Ingestion Fallback
         st.write("---")
         col_p1, col_p2, col_p3 = st.columns(3)
         with col_p1:
-            total_q = st.number_input("Total Questions Count (Pure Text-Based):", min_value=1, max_value=50, value=5)
+            total_q = st.number_input("Total Questions Count:", min_value=1, max_value=50, value=5, key="t_q")
         with col_p2:
-            total_time = st.number_input("Duration Allowed (Minutes):", min_value=5, max_value=180, value=30)
+            total_time = st.number_input("Duration Allowed (Minutes):", min_value=5, max_value=180, value=30, key="t_time")
         with col_p3:
-            max_marks_per_q = st.selectbox("Scoring Weight Mode:", [1, 2, 5], index=0)
+            max_marks_per_q = st.selectbox("Marks Per Question:", [1, 2, 5, 10], index=0, key="m_q")
 
-        # Unique Code Formulation Rules
+        # Unique Assessment Registry Code Creation
         sub_token = selected_subject[:3].replace(" ", "").upper()
         top_token = selected_topic[:3].replace(" ", "").upper()
         asmt_code = f"{selected_grade.upper()}-{sub_token}-{top_token}-{total_q}Q".replace(" ", "_")
         
-        st.markdown(f"### 🏷️ Assessment Registry Code: `{asmt_code}`")
+        st.markdown(f"### 🏷️ Assessment Identity Code: `{asmt_code}`")
         
-        # Inbuilt Dynamic Difficulty Tagging Rule Engine (Based on Learning Outcome Text)
+        # Difficulty Tagging Rule Engine based on TSV Learning Outcomes
         lo_row = df_master[(df_master['Grade'] == selected_grade) & (df_master['Chapter Name'] == selected_topic)]
         if not lo_row.empty:
             learning_outcome_text = str(lo_row['Learning Outcomes'].values[0])
-            if any(word in learning_outcome_text.lower() for word in ['analyze', 'evaluate', 'interpret', 'comprehend']):
+            if any(word in learning_outcome_text.lower() for word in ['analyze', 'evaluate', 'interpret', 'comprehend', 'critical']):
                 suggested_difficulty = "Hard 🔴"
-            elif any(word in learning_outcome_text.lower() for word in ['add', 'subtract', 'calculate', 'perform']):
+            elif any(word in learning_outcome_text.lower() for word in ['add', 'subtract', 'calculate', 'perform', 'apply']):
                 suggested_difficulty = "Medium 🟡"
             else:
                 suggested_difficulty = "Easy 🟢"
         else:
-            suggested_difficulty = "Medium 🟡 (Custom Baseline)"
+            learning_outcome_text = "Understand and apply the concepts."
+            suggested_difficulty = "Medium 🟡"
             
-        st.caption(f"🧠 **System Auto-Suggested Benchmark Difficulty:** {suggested_difficulty}")
+        st.caption(f"🧠 **System Auto-Suggested Difficulty Category:** {suggested_difficulty}")
 
-        # Generating Pre-Formatted Response Template via XlsxWriter memory byte stream
+        # GENERATING EXCEL TEMPLATE ENGINE WITH EXPLICIT DATA ENTRY COLUMNS
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            # Metadata Sheet for Verification Pipeline Integrity
+            # Sheet 1: Core System Metadata Tracking
             meta_df = pd.DataFrame({
                 "Parameter": ["Assessment Code", "Grade", "Subject", "Topic", "Questions", "Max Marks Per Q"],
                 "Value": [asmt_code, selected_grade, selected_subject, selected_topic, total_q, max_marks_per_q]
             })
             meta_df.to_excel(writer, sheet_name="Metadata_Do_Not_Touch", index=False)
             
-            # Target Column Framework Mapping (Strict Format Control)
-            columns = ["Student Name", "Roll No"] + [f"Q{i} (Marks)" for i in range(1, total_q + 1)]
+            # Sheet 2: Main Entry Matrix (Explicit Data Entry Design)
+            columns = ["Student Name", "Roll No"] + [f"Q{i} Marks (Max {max_marks_per_q})" for i in range(1, total_q + 1)]
             
-            # Dummy Manifest Array
+            # Dummy Manifest Array for Easy Reference
             mock_students = ["Aarav Sharma", "Ananya Verma", "Kabir Singh", "Sneha Joshi", "Rohan Das", "Priya Patel", "Amit Kumar", "Vikas Yadav", "Meera Nair", "Rahul Choudhury"]
             data_rows = [[student, f"R-{idx:02d}"] + [""] * total_q for idx, student in enumerate(mock_students, start=1)]
                 
             entry_df = pd.DataFrame(data_rows, columns=columns)
             entry_df.to_excel(writer, sheet_name="Student_Responses", index=False)
             
-            # Formatting Rows Layout Visual Look
             workbook  = writer.book
             worksheet = writer.sheets['Student_Responses']
             header_format = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': '#1a365d'})
             for col_num, value in enumerate(entry_df.columns.values):
                 worksheet.write(0, col_num, value, header_format)
-                
         buffer.seek(0)
         
+        st.markdown("#### 📥 Download Section")
         st.download_button(
-            label="📥 Download Excel Response Template Sheet",
+            label="Download Excel Data Input Sheet Template",
             data=buffer,
-            file_name=f"Template_{asmt_code}.xlsx",
+            file_name=f"Data_Sheet_{asmt_code}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+        
+        # ---------------------------------------------------------------------
+        # VISUAL PRINTABLE QUESTION PAPER DESIGN SECTION
+        # ---------------------------------------------------------------------
+        st.write("---")
+        st.markdown("<div style='background-color:#f8fafc; padding:25px; border:1px solid #cbd5e1; border-radius:8px;'>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align:center; color:#1a365d; margin-bottom:0px;'>🏫 PRINTABLE ASSESSMENT PAPER</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='text-align:center; margin-top:5px; color:#4a5568;'>{selected_subject.upper()} ASSESSMENT</h4>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center;'><b>Class / Grade:</b> {selected_grade} | <b>Target Topic:</b> {selected_topic}<br><b>Time Limit:</b> {total_time} Minutes | <b>Maximum Total Marks:</b> {total_q * max_marks_per_q}</p>", unsafe_allow_html=True)
+        st.markdown("<hr style='border:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+        st.markdown("**Instructions to Students:**\n1. Saare questions ko dhyan se padhein aur solve karein.\n2. Is paper mein koi diagram/picture nahi hai. Apne steps clear notebooks mein mention karein.")
+        st.write("")
+        
+        # Iterating Questions Loops Based on TSV Learning Parameters (Text-Only Mode)
+        for i in range(1, total_q + 1):
+            st.markdown(f"**Question {i}:** State, solve, or explain a text-based analytical challenge specifically aligned with the learning outcome objective: *'{learning_outcome_text}'*. Show all formulas, equations, and mathematical proofs where applicable. \n\n*(Weightage Score: {max_marks_per_q} Marks)*")
+            st.write("")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # =========================================================================
-    # SECTION 2: CHECK ASSESSMENT PANEL (EXCEL UPLOAD & REMEDIATION REPORT)
+    # TAB 2: CHECK ASSESSMENT & CALCULATE ANALYSIS GAPS
     # =========================================================================
     with tab2:
-        st.header("Upload Filled Excel Response Sheet for Auto-Checking")
-        uploaded_file = st.file_uploader("Drag and drop or browse your response Excel sheet here:", type=["xlsx"])
+        st.header("Upload Filled Excel Sheet & View Deep Diagnostic Insights")
+        
+        # Quick Clear Instructions for Teachers on Data Headers
+        st.markdown("""
+        <div style='background-color:#ebf8ff; padding:15px; border-radius:5px; border-left:4px solid #3182ce; margin-bottom:15px;'>
+            <strong>📌 Excel Data Entry Rule:</strong><br>
+            1. Download ki gayi Excel template ko open karein.<br>
+            2. <strong>'Student_Responses'</strong> sheet par jaayein. Wahan pehle do columns <code>Student Name</code> aur <code>Roll No</code> pehle se bhare hain.<br>
+            3. Agle columns (Jaise <code>Q1 Marks (Max 1)</code>, <code>Q2 Marks...</code>) mein har student ke prapt scores enter karke file save karein aur niche upload karein.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        uploaded_file = st.file_uploader("Upload your completed Excel data input sheet:", type=["xlsx"])
         
         if uploaded_file is not None:
             try:
-                # 1. Processing Validation Phase
+                # Parsing Ingestion Layers
                 meta_read = pd.read_excel(uploaded_file, sheet_name="Metadata_Do_Not_Touch")
                 response_read = pd.read_excel(uploaded_file, sheet_name="Student_Responses")
                 
-                # Fetch Context Parameters from File Headers tokens
+                # Context Extraction
                 asmt_code_ctx = meta_read.iloc[0]['Value']
                 grade_ctx = meta_read.iloc[1]['Value']
                 subject_ctx = meta_read.iloc[2]['Value']
@@ -150,16 +176,17 @@ if df_master is not None:
                 q_count = int(meta_read.iloc[4]['Value'])
                 max_m = int(meta_read.iloc[5]['Value'])
                 
-                st.success(f"✅ Sheet Authenticated. Active Assessment Profile Code: **{asmt_code_ctx}**")
+                st.success(f"✅ Data Sheet Verified. Active Identity Profile Trace: **{asmt_code_ctx}**")
                 
-                # Dynamic Column Verification Logic System
-                expected_cols = ["Student Name", "Roll No"] + [f"Q{i} (Marks)" for i in range(1, q_count + 1)]
-                q_cols = [f"Q{i} (Marks)" for i in range(1, q_count + 1)]
+                # Fetching dynamically modified Question Marks headers from Excel columns array
+                q_cols = [c for c in response_read.columns if "Marks" in c and c != "Total Score"]
+                if len(q_cols) == 0:
+                    q_cols = [f"Q{i} Marks (Max {max_m})" for i in range(1, q_count + 1)]
                 
-                # Convert null cells to zero integer values safely
+                # Data Scrubbing & Formatting stability converters
                 response_read[q_cols] = response_read[q_cols].fillna(0)
                 
-                # Core Analytics Core Calculation Framework Matrices
+                # Core Calculations Pipeline Arrays
                 total_students = len(response_read)
                 response_read['Total Score'] = response_read[q_cols].sum(axis=1)
                 max_total_possible = q_count * max_m
@@ -171,61 +198,45 @@ if df_master is not None:
                 critical_gaps_count = sum(1 for acc in q_accuracy_pct if acc < 50)
                 
                 # -------------------------------------------------------------
-                # DIAGNOSTIC PRINTABLE REPORT INTERFACE (EI UPGRADE STANDARDS)
+                # DIAGNOSTIC ACADEMIC INSIGHT REPORT LAYOUT
                 # -------------------------------------------------------------
                 st.write("---")
-                # Printable Header Simulation with Logo Embed Token
                 st.markdown(
                     f"""
                     <div style='border:2px solid #1a365d; padding:20px; border-radius:10px; background-color:#ffffff;'>
                         <div style='text-align:center; font-weight:bold; font-size:1.4em; color:#1a365d;'>🏫 CENTRAL DIAGNOSTIC ACADEMIC REPORT</div>
                         <hr style='border:1px solid #1a365d;'>
-                        <b>Grade/Class:</b> {grade_ctx} &nbsp;|&nbsp; <b>Subject:</b> {subject_ctx} &nbsp;|&nbsp; <b>Target Chapter:</b> {topic_ctx}<br>
-                        <b>Unique Code Trace:</b> {asmt_code_ctx} &nbsp;|&nbsp; <b>Evaluation Date:</b> {datetime.now().strftime('%Y-%m-%d')}
+                        <b>Class / Grade:</b> {grade_ctx} &nbsp;|&nbsp; <b>Subject:</b> {subject_ctx} &nbsp;|&nbsp; <b>Topic:</b> {topic_ctx}<br>
+                        <b>System Code Trace:</b> {asmt_code_ctx} &nbsp;|&nbsp; <b>Report Generation Date:</b> {datetime.now().strftime('%Y-%m-%d')}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
                 
-                st.write("## 1. Executive Performance Metrics Summary")
-                m1, m2, m3, m4 = st.columns(4)
+                st.write("### 1. Executive Performance Metrics Summary")
+                m1, m2, m3 = st.columns(3)
                 with m1:
                     st.metric(label="Class Mastery Index", value=f"{class_mastery_index:.1f}%")
                 with m2:
-                    st.metric(label="Critical Gaps Found", value=f"{critical_gaps_count} Sub-Topics")
+                    st.metric(label="Critical Gaps Detected", value=f"{critical_gaps_count} Questions")
                 with m3:
-                    st.metric(label="Assessment Constraints", value="Pure Text (No Diagrams)")
-                with m4:
-                    st.metric(label="Remediation Priority State", value="URGENT (Level 3)" if class_mastery_index < 60 else "MODERATE (Level 2)")
+                    st.metric(label="Remediation Priority Action State", value="URGENT (Level 3)" if class_mastery_index < 60 else "MODERATE (Level 2)")
                 
                 st.write("---")
-                st.write("## 2. Granular Learning Gap & Distractor Analysis")
-                st.bar_chart(pd.DataFrame({'Accuracy %': q_accuracy_pct.values}, index=q_cols))
+                st.write("### 2. Question-Wise Learning Accuracy Distribution")
+                st.bar_chart(pd.DataFrame({'Accuracy %': q_accuracy_pct.values}, index=[f"Q{i}" for i in range(1, len(q_cols)+1)]))
                 
-                # Zonal Classification Matrix Data display
+                # Question Matrix Zonal Analysis Datatable
                 breakdown_rows = []
-                for col in q_cols:
-                    acc = q_accuracy_pct[col]
+                for idx, col in enumerate(q_cols, start=1):
+                    acc = q_accuracy_pct.iloc[idx-1]
                     zone = "🟢 Achiever Zone (>75%)" if acc >= 75 else ("🟡 Buffer Zone (50%-75%)" if acc >= 50 else "🔴 Critical Gap Zone (<50%)")
-                    breakdown_rows.append({"Question Index": col, "Calculated Accuracy Metric": f"{acc:.1f}%", "Status Evaluation Mapping": zone})
-                st.table(pd.DataFrame(breakdown_rows).set_index("Question Index"))
+                    breakdown_rows.append({"Question Matrix Component": f"Question {idx}", "Calculated Accuracy Metric": f"{acc:.1f}%", "Status Evaluation Zone Mapping": zone})
+                st.table(pd.DataFrame(breakdown_rows).set_index("Question Matrix Component"))
                 
-                # Cognitive Flaws Misconception Tracking Model
-                st.write("### 🧠 Cognitive Misconception Matrix Model")
-                miscon_rows = []
-                for idx, col in enumerate(q_cols):
-                    acc = q_accuracy_pct[col]
-                    miscon_rows.append({
-                        "Question Parameter": col,
-                        "Core Skill Evaluated": f"Skill Attribute Level {idx+1}",
-                        "Class Score": f"{acc:.1f}%",
-                        "Identified Failure Reason (Text-Based Root Cause)": "Conceptual processing mismatch rules context errors." if acc < 60 else "Optimal grasp metrics verified."
-                    })
-                st.table(pd.DataFrame(miscon_rows).set_index("Question Parameter"))
-
-                # 3. Dynamic Operational Differentiated Group Frameworks Chunks
+                # Granular Differentiated Groups Segment Chunks Creation Logics
                 st.write("---")
-                st.write("## 3. Scalable Student Segments Differentiated Chunks")
+                st.write("### 3. Differentiated Student Learning Segments (Grouping Chunks)")
                 g_red, g_yellow, g_green = [], [], []
                 for index, row in response_read.iterrows():
                     name = row['Student Name']
@@ -236,29 +247,29 @@ if df_master is not None:
                     
                 cg1, cg2, cg3 = st.columns(3)
                 with cg1:
-                    st.markdown("<div style='background-color:#fed7d7; padding:15px; border-radius:5px;'><strong>🔴 Group Red (Intervention)</strong><br>" + ", ".join(g_red if g_red else ["None"]) + "</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background-color:#fed7d7; padding:15px; border-radius:5px;'><strong>🔴 Group Red (Targeted Intervention)</strong><br>" + ", ".join(g_red if g_red else ["None"]) + "</div>", unsafe_allow_html=True)
                 with cg2:
-                    st.markdown("<div style='background-color:#ffeebc; padding:15px; border-radius:5px;'><strong>🟡 Group Yellow (Reinforce)</strong><br>" + ", ".join(g_yellow if g_yellow else ["None"]) + "</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background-color:#ffeebc; padding:15px; border-radius:5px;'><strong>🟡 Group Yellow (Concept Reinforcement)</strong><br>" + ", ".join(g_yellow if g_yellow else ["None"]) + "</div>", unsafe_allow_html=True)
                 with cg3:
-                    st.markdown("<div style='background-color:#c6f6d5; padding:15px; border-radius:5px;'><strong>🟢 Group Green (Enrichment)</strong><br>" + ", ".join(g_green if g_green else ["None"]) + "</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background-color:#c6f6d5; padding:15px; border-radius:5px;'><strong>🟢 Group Green (Enrichment Peers)</strong><br>" + ", ".join(g_green if g_green else ["None"]) + "</div>", unsafe_allow_html=True)
 
                 # =============================================================
-                # AUTOMATED 45-MINUTE LESSON REMEDIATION PLAN BLUEPRINT
+                # ACTIONABLE REMEDIATION INTERVENTION STRATEGY BLUEPRINT
                 # =============================================================
                 st.write("---")
-                st.write("## 4. Automated Printable Class Remediation Detailed Lesson Plan")
-                st.caption("CRA Pedagogical Model Framework Optimized for Actionable Intervention Scripts.")
+                st.write("### 4. Automated 45-Minute Class Remediation Lesson Plan")
+                st.caption("Concrete-Representational-Abstract (CRA) Educational Pedagogical Standards Structure Blueprint.")
                 
                 remediation_blocks = [
-                    {"Time Split": "00 - 08 Mins", "Lesson Block Phase": "Phase 1: Conflict Confrontation", "Teacher Action Script": f"Board par target topic '{topic_ctx}' ka base statement likhein. Script: 'Class, look at this syntax rule. Agar bina parameters evaluate karein toh logical sequence breakdown kyu hota hai?'", "Expected Student Output": "Students errors to track karke root variables lock karenge."},
-                    {"Time Split": "08 - 20 Mins", "Lesson Block Phase": "Phase 2: Visual Representational", "Teacher Action Script": "Notebook templates par structural chart flow ya tree graph models blocks map karke dynamic values link kijiye.", "Expected Student Output": "Students rule sets rules mapping elements apply karte hain."},
-                    {"Time Split": "20 - 32 Mins", "Lesson Block Phase": "Phase 3: Abstract Execution Formulation", "Teacher Action Script": "Ab abstraction numerical sequences code configure karke formula board par trace down kijiye.", "Expected Student Output": "Students theoretical validation formulas equations note karenge."},
-                    {"Time Split": "32 - 45 Mins", "Lesson Block Phase": "Phase 4: Exit Slip Ticket Evaluation", "Teacher Action Script": "Differentiated Group Red lists ke desks cross check round execute kijiye aur exit tracking evaluation task test kijiye.", "Expected Student Output": "Students individual assignment sheets balance complete karke submit karenge."}
+                    {"Time Split": "00 - 08 Mins", "Lesson Block Phase": "Phase 1: Conflict Confrontation", "Teacher Action Script": f"Board par target topic '{topic_ctx}' ka text statement error note kijiye. Script: 'Class, look at this logical layout sequence, yahan processing breakdown kyu ho raha hai?'", "Expected Student Output": "Students concept error variables ko track karke lock karenge."},
+                    {"Time Split": "08 - 20 Mins", "Lesson Block Phase": "Phase 2: Representational Structure", "Teacher Action Script": "Notebook templates par logical properties grids map kijiye aur data flow structure link kijiye.", "Expected Student Output": "Students rule sets visual frameworks sheets par complete karenge."},
+                    {"Time Split": "20 - 32 Mins", "Lesson Block Phase": "Phase 3: Abstract Formulation Rules", "Teacher Action Script": "Ab abstraction numerical sequences formula board par write-down karke step validation checks execute kijiye.", "Expected Student Output": "Students computational registers parameters checking verify karenge."},
+                    {"Time Split": "32 - 45 Mins", "Lesson Block Phase": "Phase 4: Exit Ticket Evaluation", "Teacher Action Script": "Differentiated Group Red ke lists ke desk check validation tasks lead kijiye aur exit evaluation check sheet update kijiye.", "Expected Student Output": "Students tracking slips feedback complete karke sheet handover karenge."}
                 ]
                 st.table(pd.DataFrame(remediation_blocks).set_index("Time Split"))
-                st.success("🎉 Diagnosis analytics calculation loops successfully closed.")
+                st.success("🎉 Diagnosis analytics calculation workflows closed successfully.")
                 
-            except Exception as format_err:
-                st.error(f"Verification Integrity Error: Uploaded Excel ka template metadata format parse fail ho gaya. Details: {format_err}")
+            except Exception as parse_err:
+                st.error(f"Integrity Error: File content structure parse parameters configuration rule se match nahi kar raha hai. Check metadata tabs: {parse_err}")
 else:
-    st.warning("Runtime Context Missed: 'master_topics.tsv' project root direct directory folder scope mein read nahi ho raha hai.")
+    st.warning("Data Repository Missed: 'master_topics.tsv' file scope dictionary environment mein visible nahi hai.")
